@@ -162,13 +162,227 @@ plt.show()
 
 # Initially with the 'Concussion Injuries 2012-2014.csv' dataset, I handled missing values in columns like 'Games Missed' and 'Weeks Injured,' where gaps in data could affect calculations and analysis. For these numerical columns, missing values were filled with 0 where appropriate, as the absence of data likely indicated no games were missed. The correct positional name, 'cornerback', was misspelled throughout the dataset, as 'comerback', which could've led to confusion when displaying the data. I used the .replace function to change the name whenever that specific entry showed up when cycling through the dataset. When using the 'concussion_data_2015_2023.csv' dataset, I had to adjust the 'year' column formatting to fit the time-series plot parameters, which now shows 'Jan 2021' as the year.
 
+# # CHECKPOINT 3
+
+# 1 MACHINE LEARNING PLAN
+
+# EDA
+
+# In[10]:
+
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+df = pd.read_csv('Concussion Injuries 2012-2014.csv')
+
+# Select only numeric columns
+numeric_df = df.select_dtypes(include=['float64', 'int64'])
+
+correlation_matrix = numeric_df.corr()
+
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm')
+plt.title("Correlation Matrix (Concussion Injuries 2012-2014)")
+plt.show()
+
+
+
+# Looking at the Correlation matrix just above this cell, the main correlation that might be worth taking a deeper look at is the 'Week of Injury' and the 'Weeks Injured' correlation, which sits at 0.37. While this isn't a strong correlation, I believe it signifies somewhat of a trend that injuries occurring later in the season take longer to recover from. This could be due to several reasons; compiling wear & tear throughout the duration of the season, teams being cautious for playoff reasons, etc.
+
+# In[15]:
+
+
+# Load the dataset
+file_path = 'concussion_data_2015_2023.csv'
+df2 = pd.read_csv(file_path)
+
+correlation_matrix = df2.corr()
+
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm')
+plt.title("Correlation Matrix of Concussion Data (2015-2023)")
+plt.show()
+
+
+# This correlation matrix covers my second dataset, totaling concussion data yearly without the individual player data. The strong negative correlation between year and final total shows how much concussions have reduced yearly over this 9 year sample. On the other hand, game-related concussions seem to play a larger role in determining the final total compared to practice-related concussions, potentially because more intense physical contact occurs during games. Some theories as to why that may be: implementation of skull-cap in practice sessions. Intensity of games vs practice.
+
+# 2 MACHINE LEARNING IMPLEMENTATION PROCESS
+
+# 
+# PREPARE
+# 
+# ML Implementation: Concussion Prediction Using the first dataset (Concussion Injuries 2012-2014): Predict the number of games a player will miss (Games Missed) based on features like Position, Reported Injury Type, Play Time After Injury, and Average Playtime Before Injury.
+# 
+
+# In[30]:
+
+
+# Verify the columns are correct
+print(df.columns)
+
+# Strip any extra spaces from the column names
+df.columns = df.columns.str.strip()
+
+# Now proceed with defining features and target
+X = df[['Position', 'Reported Injury Type', 'Play Time After Injury', 'Average Playtime Before Injury']]  # Features
+y = df['Weeks Injured']  # Target
+
+# Encode categorical features (if needed)
+X = pd.get_dummies(X, drop_first=True)
+
+# Handle missing data if necessary (drop rows with missing values)
+df = df.dropna(subset=['Position', 'Reported Injury Type', 'Play Time After Injury', 'Average Playtime Before Injury', 'Weeks Injured'])
+
+# Split into training and testing sets
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+print(f"Training set size: {X_train.shape[0]} samples")
+print(f"Testing set size: {X_test.shape[0]} samples")
+
+
+# In[38]:
+
+
+df = pd.read_csv('Concussion Injuries 2012-2014.csv')
+
+
+# PROCESS
+
+# In[ ]:
+
+
+# Clean 'Play Time After Injury' and 'Average Playtime Before Injury' columns by removing non-numeric characters (ex. '25 downs' to just '25', also cleaning other error values)
+df['Play Time After Injury'] = df['Play Time After Injury'].replace(r'[^\d.]', '', regex=True).astype(float)
+df['Average Playtime Before Injury'] = df['Average Playtime Before Injury'].replace(r'[^\d.]', '', regex=True).astype(float)
+
+
+# In[53]:
+
+
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+
+# Split the dataset into X (features) and y (target)
+X = df[['Position', 'Reported Injury Type', 'Play Time After Injury', 'Average Playtime Before Injury']]
+y = df['Weeks Injured']
+
+# Train-test split (check for missing values before this step)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Identify numerical and categorical columns
+numerical_features = ['Play Time After Injury', 'Average Playtime Before Injury']
+categorical_features = ['Position', 'Reported Injury Type']
+
+# Define numerical transformer
+numerical_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='median')),  # Impute missing values with the median
+    ('scaler', StandardScaler())                   # Scale the numerical values
+])
+
+# Define categorical transformer
+categorical_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='most_frequent')),  # Impute missing categorical values
+    ('onehot', OneHotEncoder(handle_unknown='ignore'))      # One-hot encode categorical values
+])
+
+# Combine transformations into a ColumnTransformer
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', numerical_transformer, numerical_features),
+        ('cat', categorical_transformer, categorical_features)
+    ],
+    remainder='passthrough'  # Keep other columns (if any)
+)
+
+# Full pipeline with preprocessing and model
+model_pipeline = Pipeline(steps=[
+    ('preprocessor', preprocessor),
+    ('model', LinearRegression())  # Replace with preferred model (e.g., RandomForestRegressor)
+])
+
+# Fit the pipeline
+try:
+    model_pipeline.fit(X_train, y_train)
+    print("Pipeline fitted successfully!")
+except Exception as e:
+    print(f"Error fitting pipeline: {e}")
+
+
+
+
+# ANALYZE
+
+# In[56]:
+
+
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+
+# Predict the target values using the test set 
+y_pred = model_pipeline.predict(X_test)
+
+# Evaluation metrics
+mae = mean_absolute_error(y_test, y_pred)
+mse = mean_squared_error(y_test, y_pred)
+rmse = mean_squared_error(y_test, y_pred, squared=False)
+r2 = r2_score(y_test, y_pred)
+
+# Print metrics
+print("Model Evaluation:")
+print(f"Mean Absolute Error (MAE): {mae:.4f}")
+print(f"Mean Squared Error (MSE): {mse:.4f}")
+print(f"Root Mean Squared Error (RMSE): {rmse:.4f}")
+print(f"R-squared (R²): {r2:.4f}")
+
+
+# In[58]:
+
+
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+
+# Define models
+models = {
+    'Random Forest Regressor': RandomForestRegressor(random_state=42),
+    'Linear Regression': LinearRegression()
+}
+
+# Evaluate each model
+for model_name, model in models.items():
+    # Update the pipeline
+    model_pipeline.set_params(model=model)
+    
+    # Train the pipeline
+    model_pipeline.fit(X_train, y_train)
+    
+    # Predict and evaluate
+    y_pred = model_pipeline.predict(X_test)
+    mae = mean_absolute_error(y_test, y_pred)
+    mse = mean_squared_error(y_test, y_pred)
+    rmse = mean_squared_error(y_test, y_pred, squared=False)
+    r2 = r2_score(y_test, y_pred)
+    
+    # Print the evaluation metrics
+    print(f"Model: {model_name}")
+    print(f"  MAE: {mae:.4f}")
+    print(f"  MSE: {mse:.4f}")
+    print(f"  RMSE: {rmse:.4f}")
+    print(f"  R-squared: {r2:.4f}")
+    print("="*30)
+
+
 # ## Resources and References
 # *What resources and references have you used for this project?*
 # 📝 <!-- Answer Below -->
 # 
 # The four datasets listed above in the 'Data Sources' section are the only resources/references I've used thus far.
 
-# In[2]:
+# In[72]:
 
 
 # ⚠️ Make sure you run this cell at the end of your notebook before every submission!
